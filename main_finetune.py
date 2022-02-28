@@ -26,14 +26,11 @@ def get_args_parser():
     parser.add_argument('--epochs', default=50, type=int)
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
-    parser.add_argument('--num_workers', default=4, type=int)
 
     parser.add_argument('--model', default='Resnet50', type=str, metavar='MODEL',
                         help='Name of model to train')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (absolute lr)')
-    parser.add_argument('--alpha', default=0.5, type=int)
-    parser.add_argument('--T', default=1, type=int)
 
     parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
                         help='dataset path')
@@ -43,7 +40,7 @@ def get_args_parser():
     return parser
     
 
-def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  optimizer, scheduler, device, log_writer, epoch, alpha, T):
+def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  optimizer, scheduler, device, log_writer, epoch):
     model.train()
     teacher_model.eval()
 
@@ -63,7 +60,7 @@ def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  op
                 output_teacher_batch = teacher_model(train_batch)
         output_teacher_batch = output_teacher_batch.to(device)
 
-        loss = criterion(output_batch, labels_batch, output_teacher_batch, alpha, T)
+        loss = criterion(output_batch, labels_batch, output_teacher_batch)
 
         optimizer.zero_grad()
         loss.backward()
@@ -139,13 +136,13 @@ def main(args):
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        num_workers=4,
         drop_last=True,
     )
     data_loader_val = torch.utils.data.DataLoader(
         dataset_val, sampler=sampler_val,
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        num_workers=4,
         drop_last=False
     )
 
@@ -163,7 +160,7 @@ def main(args):
     start_time = time.time()
     
     for epoch in range(args.epochs):
-        train(model, teacher_model, criterion, data_loader_train,dataset_train_sizes, optimizer, scheduler, device, log_writer, epoch, args.alpha, args.T)
+        train(model, teacher_model, criterion, data_loader_train,dataset_train_sizes, optimizer, scheduler, device, log_writer, epoch)
 
         current_acc = evaluate(data_loader_val, dataset_val_sizes, model, device)
 
@@ -182,7 +179,6 @@ def main(args):
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
-
 
 
 
