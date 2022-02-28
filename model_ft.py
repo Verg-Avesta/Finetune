@@ -9,8 +9,7 @@ class Resnet50T(nn.Module):
         super(Resnet50T, self).__init__()
         self.m = models.resnet50(pretrained=True)
         for param in self.m.parameters():
-            param.requires_grad = False
-        
+            param.requires_grad = False       
     
     def forward(self, x):
         x = self.m(x)
@@ -25,7 +24,6 @@ class Resnet50S(nn.Module):
         self.m.fc = nn.Linear(2048, 256)
         self.fc1 = nn.Linear(256, 1000)
         
-    
     def forward(self, x):
         x = self.m(x)
         x = F.relu(self.fc1(x))
