@@ -9,7 +9,8 @@ class Resnet50T(nn.Module):
         super(Resnet50T, self).__init__()
         self.m = models.resnet50(pretrained=True)
         for param in self.m.parameters():
-            param.requires_grad = False       
+            param.requires_grad = False
+        
     
     def forward(self, x):
         x = self.m(x)
@@ -24,12 +25,16 @@ class Resnet50S(nn.Module):
         self.m.fc = nn.Linear(2048, 256)
         self.fc1 = nn.Linear(256, 1000)
         
+    
     def forward(self, x):
         x = self.m(x)
         x = F.relu(self.fc1(x))
         return x
 
 def loss_fn_kd(outputs, labels, teacher_outputs, alpha, T):
+    alpha = 0.5
+    T = 1
+    
     KD_loss = nn.KLDivLoss()(F.log_softmax(outputs/T, dim=1),
                              F.softmax(teacher_outputs/T, dim=1)) * (alpha * T * T) + \
               F.cross_entropy(outputs, labels) * (1. - alpha)
