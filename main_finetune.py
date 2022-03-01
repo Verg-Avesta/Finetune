@@ -22,30 +22,29 @@ def get_args_parser():
     parser = argparse.ArgumentParser('Fine tune', add_help=False)
 
     parser.add_argument('--batch_size', default=64, type=int,
-                        help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
+                        help='Batch size per GPU')
     parser.add_argument('--epochs', default=50, type=int)
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
 
     parser.add_argument('--model', default='Resnet50', type=str, metavar='MODEL',
                         help='Name of model to train')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.0001, metavar='LR',
                         help='learning rate (absolute lr)')
 
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
-                        help='dataset path')
-    parser.add_argument('--log_dir', default='./log_dir',
-                        help='path where to tensorboard log')
+    parser.add_argument('--data_path', default='/DATA5_DB8/data/ILSVRC2012', type=str,help='dataset path')
+    parser.add_argument('--log_dir', default='./log_dir',help='path where to tensorboard log')
     
     return parser
     
 
-def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  optimizer, scheduler, device, log_writer, epoch):
+def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  optimizer, scheduler, device, log_writer, epoch, batch_size):
     model.train()
     teacher_model.eval()
 
     running_loss = 0.0
     running_corrects = 0
+    kilo_loss = 0.0
 
     for i, (train_batch, labels_batch) in enumerate(data_loader):
         train_batch = train_batch.to(device)
@@ -69,6 +68,15 @@ def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  op
 
         running_loss += loss.item() * train_batch.size(0)
         running_corrects += torch.sum(preds == labels_batch.data)
+
+        if i % 100 == 99:
+            print(f'{(i + 1) * batch_size}/{dataset_train_sizes}')
+
+        if i % 500 == 499: 
+            kilo_loss = running_loss - kilo_loss
+            log_writer.add_scalar('epoch loss', kilo_loss / (500 * batch_size), epoch * (dataset_train_sizes // batch_size) + i + 1 )
+            print(f'Loss: {kilo_loss / (500 * batch_size)}')
+
 
     scheduler.step()
 
@@ -106,19 +114,20 @@ def main(args):
     device = torch.device(args.device)
 
     transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.0), interpolation=3),  # 3 is bicubic
+            transforms.RandomResizedCrop(224, scale=(0.2, 1.0)),  
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
     
     transform_val = transforms.Compose([
-        transforms.Resize(256, interpolation=PIL.Image.BICUBIC),
+        transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])    
     ])
 
+    print('Start to prepare data')
     dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
     print(dataset_train)
     dataset_train_sizes = len(dataset_train)
@@ -145,11 +154,12 @@ def main(args):
         num_workers=4,
         drop_last=False
     )
-
+    print('Data loader finished')
     model = model_ft.Resnet50S()
     teacher_model = model_ft.Resnet50T()
     model.to(device)
     teacher_model.to(device)
+    print('Model finished')
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = model_ft.loss_fn_kd
@@ -160,7 +170,8 @@ def main(args):
     start_time = time.time()
     
     for epoch in range(args.epochs):
-        train(model, teacher_model, criterion, data_loader_train,dataset_train_sizes, optimizer, scheduler, device, log_writer, epoch)
+        print(f'The {epoch} epoch begins')
+        train(model, teacher_model, criterion, data_loader_train,dataset_train_sizes, optimizer, scheduler, device, log_writer, epoch, args.batch_size)
 
         current_acc = evaluate(data_loader_val, dataset_val_sizes, model, device)
 
@@ -185,6 +196,5 @@ def main(args):
 if __name__ == '__main__':
     args = get_args_parser()
     args = args.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    Path(args.log_dir).mkdir(parents=True, exist_ok=True)
     main(args)
