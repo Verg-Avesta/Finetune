@@ -31,7 +31,7 @@ class Resnet50S(nn.Module):
         x = F.relu(self.fc1(x))
         return x
 
-def loss_fn_kd(outputs, labels, teacher_outputs, alpha, T):
+def loss_fn_kd(outputs, labels, teacher_outputs):
     alpha = 0.5
     T = 1
     
