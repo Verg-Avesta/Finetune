@@ -27,8 +27,35 @@ class Resnet50S(nn.Module):
         
     
     def forward(self, x):
+        x = F.relu(self.m(x))
+        x = self.fc1(x)
+        return x
+
+class Resnet101T(nn.Module):
+    def __init__(self):
+        super(Resnet101T, self).__init__()
+        self.m = models.resnet101(pretrained=True)
+        for param in self.m.parameters():
+            param.requires_grad = False
+        
+    
+    def forward(self, x):
         x = self.m(x)
-        x = F.relu(self.fc1(x))
+        return x
+
+class Resnet101S(nn.Module):
+    def __init__(self):
+        super(Resnet101S, self).__init__()
+        self.m = models.resnet101(pretrained=True)
+        for param in self.m.parameters():
+            param.requires_grad = False
+        self.m.fc = nn.Linear(2048, 256)
+        self.fc1 = nn.Linear(256, 1000)
+        
+    
+    def forward(self, x):
+        x = F.relu(self.m(x))
+        x = self.fc1(x)
         return x
 
 def loss_fn_kd(outputs, labels, teacher_outputs):
