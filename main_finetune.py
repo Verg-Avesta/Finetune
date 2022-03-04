@@ -27,7 +27,7 @@ def get_args_parser():
                         help='Batch size per GPU')
     parser.add_argument('--epochs', default=50, type=int)
     parser.add_argument('--eval', default=0, type=int)
-    parser.add_argument('--device', default='cuda',
+    parser.add_argument('--device', default='cuda:0',
                         help='device to use for training / testing')
 
     parser.add_argument('--model', default='Resnet50', type=str, metavar='MODEL',
@@ -120,7 +120,7 @@ def evaluate(data_loader, dataset_val_sizes, model, device):
 def main(args):
 
     #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    #os.environ["CUDA_VISIBLE_DEVICES"] = "1, 0"
+    #os.environ["CUDA_VISIBLE_DEVICES"] = "3, 4, 5"
     device = torch.device(args.device)
 
     # Data
@@ -178,8 +178,8 @@ def main(args):
     else:
         print('Please choose one from Resnet50, Resnet101, ViT or DeiT!')
         return
-    #model = nn.DataParallel(model)
-    #teacher_model = nn.DataParallel(model)
+    #model = nn.DataParallel(model, device_ids = [0, 1, 2])
+    #teacher_model = nn.DataParallel(model, device_ids = [0, 1, 2])
     model.to(device)
     teacher_model.to(device)
     print(f'Model {args.model} preparation finished')
