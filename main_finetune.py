@@ -1,5 +1,4 @@
 from random import shuffle
-from sched import scheduler
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,17 +25,17 @@ def get_args_parser():
     parser.add_argument('--batch_size', default=640, type=int,
                         help='Batch size per GPU')
     parser.add_argument('--epochs', default=50, type=int)
-    parser.add_argument('--eval', default=0, type=int)
+    parser.add_argument('--eval', default=0, type=int, help='1 for load model and evaluate')
     parser.add_argument('--device', default='cuda:0',
                         help='device to use for training / testing')
 
     parser.add_argument('--model', default='Resnet50', type=str, metavar='MODEL',
-                        help='Name of model to train')
+                        help='Name of model to train, choose one from Resnet50, Resnet101, ViT or DeiT')
     parser.add_argument('--lr', type=float, default=0.0001, metavar='LR',
                         help='learning rate (absolute lr)')
 
     parser.add_argument('--data_path', default='/DATA5_DB8/data/ILSVRC2012', type=str,help='dataset path')
-    parser.add_argument('--log_dir', default='./log_dir',help='path where to tensorboard log')
+    #parser.add_argument('--log_dir', default='./log_dir',help='path where to tensorboard log')
     
     return parser
     
@@ -90,7 +89,7 @@ def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  op
     log_writer.add_scalar('train accuracy', epoch_acc, epoch)
 
 
-def evaluate(data_loader, dataset_val_sizes, model, device):
+def evaluate(data_loader, dataset_val_sizes, model, device, batch_size):
     model.eval()
 
     #running_loss = 0.0
@@ -110,7 +109,7 @@ def evaluate(data_loader, dataset_val_sizes, model, device):
             running_corrects += torch.sum(preds == labels_batch.data)
             
             if i % 10 == 9:
-                print(f'{(i + 1) * 640}/{dataset_val_sizes}')
+                print(f'{(i + 1) * batch_size}/{dataset_val_sizes}')
     
     epoch_acc = running_corrects.double() / dataset_val_sizes
     
@@ -153,19 +152,19 @@ def main(args):
         dataset_train, 
         shuffle=True,
         batch_size=args.batch_size,
-        num_workers=4,
+        num_workers=10,
     )
     data_loader_val = torch.utils.data.DataLoader(
         dataset_val, 
         shuffle = False,
         batch_size=args.batch_size,
-        num_workers=4,
+        num_workers=10,
     )
     print('Data loader finished')
 
     # tensorboard
-    os.makedirs(args.log_dir, exist_ok=True)
-    log_writer = SummaryWriter(log_dir=args.log_dir)
+    os.makedirs(f'./{args.model}_log_dir', exist_ok=True)
+    log_writer = SummaryWriter(log_dir=f'./{args.model}_log_dir')
 
     # Model
     print(f'Start to prepare {args.model} model')
@@ -175,6 +174,12 @@ def main(args):
     elif args.model == 'Resnet101':
         model = model_ft.Resnet101S()
         teacher_model = model_ft.Resnet101T()
+    elif args.model == 'ViT':
+        model = model_ft.ViTS()
+        teacher_model = model_ft.ViTT()
+    elif args.model == 'DeiT':
+        model = model_ft.DeiTS()
+        teacher_model = model_ft.DeiTT()
     else:
         print('Please choose one from Resnet50, Resnet101, ViT or DeiT!')
         return
@@ -187,7 +192,7 @@ def main(args):
     # Load saved model, evaluate it and exit
     if args.eval == 1:
         print('Loading saved model')
-        model.load_state_dict(torch.load('./log_dir/model_weights.pth'))
+        model.load_state_dict(torch.load(f'./{args.model}_log_dir/model_weights.pth'))
         
         print('Testing saved model')
         acc = 0.0
@@ -211,15 +216,15 @@ def main(args):
         print(f'The {epoch} epoch begins')
 
         # Evaluate model without train first to prove correctness
-        current_acc = evaluate(data_loader_val, dataset_val_sizes, model, device)
+        current_acc = evaluate(data_loader_val, dataset_val_sizes, model, device, args.batch_size)
         # Only once
         if epoch == 0:
-            teacher_acc = evaluate(data_loader_val, dataset_val_sizes, teacher_model, device)
+            teacher_acc = evaluate(data_loader_val, dataset_val_sizes, teacher_model, device, args.batch_size)
 
         if current_acc > best_acc:
             best_acc = current_acc
             if epoch > 0:
-                torch.save(model.state_dict(), './log_dir/model_weights.pth')
+                torch.save(model.state_dict(), f'./{args.model}_log_dir/model_weights.pth')
         
         print(f"Accuracy of the student network on the {dataset_val_sizes} test images: {(100 * current_acc):.1f}%")
         print(f'Max accuracy: {(100 * best_acc):.2f}%')
@@ -242,5 +247,5 @@ def main(args):
 if __name__ == '__main__':
     args = get_args_parser()
     args = args.parse_args()
-    Path(args.log_dir).mkdir(parents=True, exist_ok=True)
+    Path(f'./{args.model}_log_dir').mkdir(parents=True, exist_ok=True)
     main(args)
