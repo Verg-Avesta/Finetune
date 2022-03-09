@@ -22,25 +22,28 @@ cudnn.benchmark = True
 def get_args_parser():
     parser = argparse.ArgumentParser('Fine tune', add_help=False)
 
+    # Train parameters
     parser.add_argument('--batch_size', default=640, type=int,
                         help='Batch size per GPU')
     parser.add_argument('--epochs', default=50, type=int)
-    parser.add_argument('--eval', default=0, type=int, help='1 for load model and evaluate')
-    parser.add_argument('--device', default='cuda:0',
-                        help='device to use for training / testing')
+    parser.add_argument('--eval', default=0, type=int, help='1 for load model and evaluate directly')
 
+    # Model parameters
     parser.add_argument('--model', default='Resnet50', type=str, metavar='MODEL',
                         help='Name of model to train, choose one from Resnet50, Resnet101, ViT or DeiT')
     parser.add_argument('--lr', type=float, default=0.0001, metavar='LR',
                         help='learning rate (absolute lr)')
 
+    # Dataset parameters
     parser.add_argument('--data_path', default='/DATA5_DB8/data/ILSVRC2012', type=str,help='dataset path')
+    parser.add_argument('--device', default='cuda:0',help='device to use for training / testing')
     #parser.add_argument('--log_dir', default='./log_dir',help='path where to tensorboard log')
     
     return parser
     
 
 def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  optimizer, scheduler, device, log_writer, epoch, batch_size):
+    # switch model to train mode, teacher model to evaluation mode
     model.train()
     teacher_model.eval()
 
@@ -49,18 +52,22 @@ def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  op
     kilo_loss = 0.0
 
     for i, (train_batch, labels_batch) in enumerate(data_loader):
+        # load data from dataloader
         train_batch = train_batch.to(device)
         labels_batch = labels_batch.to(device)
 
         train_batch, labels_batch = Variable(train_batch), Variable(labels_batch)
 
+        # compute output of student model
         output_batch = model(train_batch)
         _, preds = torch.max(output_batch, 1)
         
+        # compute output of teacher model(no need for autograd)
         with torch.no_grad():
                 output_teacher_batch = teacher_model(train_batch)
         output_teacher_batch = output_teacher_batch.to(device)
 
+        # autograd and optimize
         loss = criterion(output_batch, labels_batch, output_teacher_batch)
 
         optimizer.zero_grad()
@@ -68,6 +75,7 @@ def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  op
 
         optimizer.step()
 
+        # total loss of the train epoch, total correct number of train epoch, and loss per 50 batches
         running_loss += loss.item() * train_batch.size(0)
         running_corrects += torch.sum(preds == labels_batch.data)
         kilo_loss += loss.item() * train_batch.size(0)
@@ -90,27 +98,31 @@ def train(model, teacher_model, criterion, data_loader, dataset_train_sizes,  op
 
 
 def evaluate(data_loader, dataset_val_sizes, model, device, batch_size):
+    # switch to evaluation mode
     model.eval()
 
-    #running_loss = 0.0
     running_corrects = 0
 
     with torch.no_grad():
         for i, (data_batch, labels_batch) in enumerate(data_loader):
-
+            
+            # load data from dataloader
             data_batch = data_batch.to(device)
             labels_batch = labels_batch.to(device)
 
             data_batch, labels_batch = Variable(data_batch), Variable(labels_batch)
             
+            # compute output
             output_batch = model(data_batch)
             _, preds = torch.max(output_batch, 1)
 
+            # total number of correct prediction
             running_corrects += torch.sum(preds == labels_batch.data)
             
             if i % 10 == 9:
                 print(f'{(i + 1) * batch_size}/{dataset_val_sizes}')
     
+    # accuracy of this evaluate epoch
     epoch_acc = running_corrects.double() / dataset_val_sizes
     
     return epoch_acc 
@@ -122,7 +134,7 @@ def main(args):
     #os.environ["CUDA_VISIBLE_DEVICES"] = "3, 4, 5"
     device = torch.device(args.device)
 
-    # Data
+    # Data augmentation
     transform_train = transforms.Compose([
             transforms.RandomResizedCrop(224, scale=(0.2, 1.0)),  
             transforms.RandomHorizontalFlip(),
@@ -137,6 +149,7 @@ def main(args):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])    
     ])
 
+    # Loading data from dataset
     print('Start to load data')
     dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
     print(dataset_train)
@@ -162,11 +175,11 @@ def main(args):
     )
     print('Data loader finished')
 
-    # tensorboard
+    # tensorboard directory
     os.makedirs(f'./{args.model}_log_dir', exist_ok=True)
     log_writer = SummaryWriter(log_dir=f'./{args.model}_log_dir')
 
-    # Model
+    # Model choice
     print(f'Start to prepare {args.model} model')
     if args.model == 'Resnet50':
         model = model_ft.Resnet50S()
@@ -202,7 +215,7 @@ def main(args):
 
         return
 
-    # Train and evaluate per epoch
+    # set optimizer, loss function and learning rate scheduler
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = model_ft.loss_fn_kd
     scheduler = lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
@@ -212,15 +225,17 @@ def main(args):
     teacher_acc = 0.0
     start_time = time.time()
     
+    # Train and evaluate per epoch
     for epoch in range(args.epochs):
         print(f'The {epoch} epoch begins')
 
         # Evaluate model without train first to prove correctness
         current_acc = evaluate(data_loader_val, dataset_val_sizes, model, device, args.batch_size)
-        # Only once
+        # Evaluate teacher model only once
         if epoch == 0:
             teacher_acc = evaluate(data_loader_val, dataset_val_sizes, teacher_model, device, args.batch_size)
 
+        # save the best model
         if current_acc > best_acc:
             best_acc = current_acc
             if epoch > 0:
