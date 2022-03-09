@@ -1,7 +1,6 @@
 # Finetune with knowledge distillation
 
 * Finetune Resnet50/Resnet101/ViT/DeiT on ImageNet
-* Author: Chang Liu
 * Framework: PyTorch
 * Dataset: ImageNet
 
