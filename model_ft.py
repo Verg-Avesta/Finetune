@@ -5,6 +5,7 @@ from torchvision import datasets, models, transforms
 import torch.nn.functional as F
 import timm
 
+# Resnet50 teacher model
 class Resnet50T(nn.Module):
     def __init__(self):
         super(Resnet50T, self).__init__()
@@ -17,6 +18,7 @@ class Resnet50T(nn.Module):
         return x
 
 
+# Resnet50 student model
 class Resnet50S(nn.Module):
     def __init__(self):
         super(Resnet50S, self).__init__()
@@ -32,6 +34,7 @@ class Resnet50S(nn.Module):
         return x
 
 
+# Resnet101 teacher model
 class Resnet101T(nn.Module):
     def __init__(self):
         super(Resnet101T, self).__init__()
@@ -44,6 +47,7 @@ class Resnet101T(nn.Module):
         return x
 
 
+# Resnet101 student model
 class Resnet101S(nn.Module):
     def __init__(self):
         super(Resnet101S, self).__init__()
@@ -59,6 +63,7 @@ class Resnet101S(nn.Module):
         return x
 
 
+# Vision transformer teacher model
 class ViTT(nn.Module):
     def __init__(self):
         super(ViTT, self).__init__()
@@ -71,6 +76,7 @@ class ViTT(nn.Module):
         return x
 
 
+# Vision transformer student model
 class ViTS(nn.Module):
     def __init__(self):
         super(ViTS, self).__init__()
@@ -86,6 +92,7 @@ class ViTS(nn.Module):
         return x
 
 # Maybe unable to download model
+# DeiT teacher model
 class DeiTT(nn.Module):
     def __init__(self):
         super(DeiTT, self).__init__()
@@ -98,6 +105,7 @@ class DeiTT(nn.Module):
         return x
 
 
+# DeiT student model
 class DeiTS(nn.Module):
     def __init__(self):
         super(DeiTS, self).__init__()
@@ -113,7 +121,7 @@ class DeiTS(nn.Module):
         return x
 
 
-
+# loss function, KL divergence and cross entropy
 def loss_fn_kd(outputs, labels, teacher_outputs):
     alpha = 0.5
     T = 1
